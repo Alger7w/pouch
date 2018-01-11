@@ -2,24 +2,64 @@ package ctrd
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/alibaba/pouch/apis/types"
 	"github.com/alibaba/pouch/pkg/jsonstream"
+	"github.com/alibaba/pouch/pkg/reference"
+	"github.com/alibaba/pouch/pkg/utils"
 
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/leases"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	digest "github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go/v1"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+// GetImageConfig returns the image's configure.
+func (c *Client) GetImageConfig(ctx context.Context, ref string) (v1.ImageConfig, error) {
+	var (
+		ociimage v1.Image
+		config   v1.ImageConfig
+	)
+
+	image, err := c.client.GetImage(ctx, ref)
+	if err != nil {
+		return config, err
+	}
+
+	ic, err := image.Config(ctx)
+	if err != nil {
+		return config, err
+	}
+	switch ic.MediaType {
+	case v1.MediaTypeImageConfig, images.MediaTypeDockerSchema2Config:
+		p, err := content.ReadBlob(ctx, image.ContentStore(), ic.Digest)
+		if err != nil {
+			return config, err
+		}
+
+		if err := json.Unmarshal(p, &ociimage); err != nil {
+			return config, err
+		}
+		config = ociimage.Config
+	default:
+		return config, fmt.Errorf("unknown image config media type %s", ic.MediaType)
+	}
+
+	return config, nil
+}
 
 // RemoveImage deletes an image.
 func (c *Client) RemoveImage(ctx context.Context, ref string) error {
@@ -38,21 +78,29 @@ func (c *Client) ListImages(ctx context.Context, filter ...string) ([]types.Imag
 	}
 
 	images := make([]types.ImageInfo, 0, 32)
-	digestPrefix := "sha256:"
 	for _, image := range imageList {
 		descriptor := image.Target
-		digest := []byte(descriptor.Digest)
+		digest := descriptor.Digest
 
 		size, err := image.Size(ctx, c.client.ContentStore(), platforms.Default())
 		if err != nil {
 			return nil, err
 		}
 
+		ref, err := reference.Parse(image.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO(Wei Fu): the go-digest will deprecate the Hex() method.
+		// We need to use Encoded() if update the go-digest version.
 		images = append(images, types.ImageInfo{
-			Name:   image.Name,
-			ID:     string(digest[len(digestPrefix) : len(digestPrefix)+12]),
-			Digest: string(digest),
-			Size:   size,
+			CreatedAt: image.CreatedAt.Format(utils.TimeLayout),
+			Name:      image.Name,
+			ID:        truncateID(digest.Hex()),
+			Digest:    digest.String(),
+			Size:      size,
+			Tag:       ref.Tag,
 		})
 	}
 	return images, nil
@@ -251,6 +299,15 @@ outer:
 			done = true // allow ui to update once more
 		}
 	}
+}
+
+func truncateID(id string) string {
+	var shortLen = 12
+
+	if len(id) > shortLen {
+		return id[:shortLen]
+	}
+	return id
 }
 
 type jobs struct {

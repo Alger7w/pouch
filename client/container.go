@@ -8,9 +8,24 @@ import (
 	"github.com/alibaba/pouch/apis/types"
 )
 
+// ContainerAPIClient defines methods of Container client.
+type ContainerAPIClient interface {
+	ContainerCreate(config types.ContainerConfig, hostConfig *types.HostConfig, containerName string) (*types.ContainerCreateResp, error)
+	ContainerStart(name, detachKeys string) error
+	ContainerStop(name, timeout string) error
+	ContainerRemove(name string, force bool) error
+	ContainerList(all bool) ([]*types.Container, error)
+	ContainerAttach(name string, stdin bool) (net.Conn, *bufio.Reader, error)
+	ContainerCreateExec(name string, config *types.ExecCreateConfig) (*types.ExecCreateResp, error)
+	ContainerStartExec(execid string, config *types.ExecStartConfig) (net.Conn, *bufio.Reader, error)
+	ContainerGet(name string) (*types.ContainerJSON, error)
+	ContainerRename(id string, name string) error
+	ContainerPause(name string) error
+}
+
 // ContainerCreate creates a new container based in the given configuration.
-func (client *APIClient) ContainerCreate(config *types.ContainerConfig, hostConfig *types.HostConfig, containerName string) (*types.ContainerCreateResp, error) {
-	createConfig := types.ContainerConfigWrapper{
+func (client *APIClient) ContainerCreate(config types.ContainerConfig, hostConfig *types.HostConfig, containerName string) (*types.ContainerCreateResp, error) {
+	createConfig := types.ContainerCreateConfig{
 		ContainerConfig: config,
 		HostConfig:      hostConfig,
 	}
@@ -47,8 +62,11 @@ func (client *APIClient) ContainerStart(name, detachKeys string) error {
 }
 
 // ContainerStop stops a container.
-func (client *APIClient) ContainerStop(name string) error {
-	resp, err := client.post("/containers/"+name+"/stop", nil, nil)
+func (client *APIClient) ContainerStop(name string, timeout string) error {
+	q := url.Values{}
+	q.Add("t", timeout)
+
+	resp, err := client.post("/containers/"+name+"/stop", q, nil)
 	ensureCloseReader(resp)
 
 	return err
@@ -70,8 +88,13 @@ func (client *APIClient) ContainerRemove(name string, force bool) error {
 }
 
 // ContainerList returns the list of containers.
-func (client *APIClient) ContainerList() ([]*types.Container, error) {
-	resp, err := client.get("/containers/json", nil)
+func (client *APIClient) ContainerList(all bool) ([]*types.Container, error) {
+	q := url.Values{}
+	if all {
+		q.Set("all", "true")
+	}
+
+	resp, err := client.get("/containers/json", q)
 	if err != nil {
 		return nil, err
 	}
@@ -100,13 +123,13 @@ func (client *APIClient) ContainerAttach(name string, stdin bool) (net.Conn, *bu
 }
 
 // ContainerCreateExec creates exec process.
-func (client *APIClient) ContainerCreateExec(name string, config *types.ExecCreateConfig) (*types.ExecCreateResponse, error) {
+func (client *APIClient) ContainerCreateExec(name string, config *types.ExecCreateConfig) (*types.ExecCreateResp, error) {
 	response, err := client.post("/containers/"+name+"/exec", url.Values{}, config)
 	if err != nil {
 		return nil, err
 	}
 
-	body := &types.ExecCreateResponse{}
+	body := &types.ExecCreateResp{}
 	decodeBody(body, response.Body)
 	ensureCloseReader(response)
 
@@ -150,6 +173,14 @@ func (client *APIClient) ContainerRename(id string, name string) error {
 // ContainerPause pauses a container
 func (client *APIClient) ContainerPause(name string) error {
 	resp, err := client.post("/containers/"+name+"/pause", nil, nil)
+	ensureCloseReader(resp)
+
+	return err
+}
+
+// ContainerUnpause unpauses a container
+func (client *APIClient) ContainerUnpause(name string) error {
+	resp, err := client.post("/containers/"+name+"/unpause", nil, nil)
 	ensureCloseReader(resp)
 
 	return err

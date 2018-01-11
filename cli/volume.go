@@ -11,8 +11,9 @@ import (
 )
 
 // volumeDescription is used to describe volume command in detail and auto generate command doc.
-// TODO: add description
-var volumeDescription = ""
+var volumeDescription = "Manager the volumes in pouchd. " +
+	"It contains the functions of create/remove/list/inspect volume, 'driver' is used to list drivers that pouch support. " +
+	"The default volume driver is local, it will make a directory to bind into container."
 
 // VolumeCommand is used to implement 'volume' command.
 type VolumeCommand struct {
@@ -40,8 +41,8 @@ func (v *VolumeCommand) RunE(args []string) error {
 }
 
 // volumeCreateDescription is used to describe volume create command in detail and auto generate command doc.
-// TODO: add description
-var volumeCreateDescription = ""
+var volumeCreateDescription = "Create a volume in pouchd. " +
+	"It must specify volume's name, size and driver. You can use 'volume driver' to get drivers that pouch support."
 
 // VolumeCreateCommand is used to implement 'volume create' command.
 type VolumeCreateCommand struct {
@@ -59,7 +60,7 @@ func (v *VolumeCreateCommand) Init(c *Cli) {
 	v.cli = c
 
 	v.cmd = &cobra.Command{
-		Use:   "create [args]",
+		Use:   "create [OPTIONS]",
 		Short: "Create a volume",
 		Long:  volumeCreateDescription,
 		Args:  cobra.NoArgs,
@@ -89,7 +90,7 @@ func (v *VolumeCreateCommand) runVolumeCreate(args []string) error {
 }
 
 func (v *VolumeCreateCommand) volumeCreate() error {
-	volumeReq := &types.VolumeCreateRequest{
+	volumeReq := &types.VolumeCreateConfig{
 		Driver:     v.driver,
 		Name:       v.name,
 		DriverOpts: map[string]string{},
@@ -110,14 +111,14 @@ func (v *VolumeCreateCommand) volumeCreate() error {
 	return nil
 }
 
-func parseVolume(volumeReq *types.VolumeCreateRequest, v *VolumeCreateCommand) error {
+func parseVolume(volumeCreateConfig *types.VolumeCreateConfig, v *VolumeCreateCommand) error {
 	// analyze labels.
 	for _, label := range v.labels {
 		l := strings.Split(label, "=")
 		if len(label) != 2 {
 			return fmt.Errorf("unknown label %s: label format must be key=value", label)
 		}
-		volumeReq.Labels[l[0]] = l[1]
+		volumeCreateConfig.Labels[l[0]] = l[1]
 	}
 
 	// analyze options.
@@ -126,7 +127,7 @@ func parseVolume(volumeReq *types.VolumeCreateRequest, v *VolumeCreateCommand) e
 		if len(opt) != 2 {
 			return fmt.Errorf("unknown option %s: option format must be key=value", option)
 		}
-		volumeReq.DriverOpts[opt[0]] = opt[1]
+		volumeCreateConfig.DriverOpts[opt[0]] = opt[1]
 	}
 
 	// analyze selectors.
@@ -135,20 +136,24 @@ func parseVolume(volumeReq *types.VolumeCreateRequest, v *VolumeCreateCommand) e
 		if len(s) != 2 {
 			return fmt.Errorf("unknown selector %s: selector format must be key=value", selector)
 		}
-		volumeReq.DriverOpts["selector."+s[0]] = s[1]
+		volumeCreateConfig.DriverOpts["selector."+s[0]] = s[1]
 	}
 	return nil
 }
 
 // volumeCreateExample shows examples in volume create command, and is used in auto-generated cli docs.
-// TODO: add example
 func volumeCreateExample() string {
-	return ""
+	return `$ pouch volume create -d local -n pouch-volume -o size=100g
+Mountpoint:
+Name:         pouch-volume
+Scope:
+CreatedAt:
+Driver:       local`
 }
 
 // volumeRmDescription is used to describe volume rm command in detail and auto generate command doc.
-// TODO: add description
-var volumeRmDescription = ""
+var volumeRmDescription = "Remove a volume in pouchd. " +
+	"It need specify volume's name, when the volume is exist and is unuse, it will be remove."
 
 // VolumeRemoveCommand is used to implement 'volume rm' command.
 type VolumeRemoveCommand struct {
@@ -159,7 +164,7 @@ type VolumeRemoveCommand struct {
 func (v *VolumeRemoveCommand) Init(c *Cli) {
 	v.cli = c
 	v.cmd = &cobra.Command{
-		Use:     "remove <name>",
+		Use:     "remove VOLUME",
 		Aliases: []string{"rm"},
 		Short:   "Remove volume",
 		Long:    volumeRmDescription,
@@ -173,9 +178,7 @@ func (v *VolumeRemoveCommand) Init(c *Cli) {
 }
 
 // addFlags adds flags for specific command.
-func (v *VolumeRemoveCommand) addFlags() {
-	// TODO: add flags here
-}
+func (v *VolumeRemoveCommand) addFlags() {}
 
 // runVolumeRm is the entry of VolumeRemoveCommand command.
 func (v *VolumeRemoveCommand) runVolumeRm(args []string) error {
@@ -185,11 +188,16 @@ func (v *VolumeRemoveCommand) runVolumeRm(args []string) error {
 
 	apiClient := v.cli.Client()
 
-	return apiClient.VolumeRemove(name)
+	err := apiClient.VolumeRemove(name)
+	if err == nil {
+		fmt.Printf("Removed: %s\n", name)
+	}
+
+	return err
 }
 
 // volumeRmExample shows examples in volume rm command, and is used in auto-generated cli docs.
-// TODO: add example
 func volumeRmExample() string {
-	return "Add volume create examples in code, not in doc."
+	return `$ pouch volume rm pouch-volume
+Removed: pouch-volume`
 }

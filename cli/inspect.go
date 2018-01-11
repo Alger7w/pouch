@@ -19,19 +19,19 @@ type InspectCommand struct {
 func (p *InspectCommand) Init(c *Cli) {
 	p.cli = c
 	p.cmd = &cobra.Command{
-		Use:   "inspect [container]",
+		Use:   "inspect CONTAINER",
 		Short: "Get the detailed information of container",
 		Long:  inspectDescription,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return p.runInpsect(args)
+			return p.runInspect(args)
 		},
 		Example: inspectExample(),
 	}
 }
 
-// runInpsect is the entry of InspectCommand command.
-func (p *InspectCommand) runInpsect(args []string) error {
+// runInspect is the entry of InspectCommand command.
+func (p *InspectCommand) runInspect(args []string) error {
 	apiClient := p.cli.Client()
 	name := args[0]
 	container, err := apiClient.ContainerGet(name)

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/alibaba/pouch/network"
 	"github.com/alibaba/pouch/pkg/utils"
 	"github.com/alibaba/pouch/volume"
 )
@@ -8,10 +9,16 @@ import (
 // Config refers to daemon's whole configurations.
 type Config struct {
 	//Volume config
-	volume.Config
+	VolumeConfig volume.Config
+
+	// Network config
+	NetworkConfg network.Config
 
 	// Server listening address.
 	Listen []string
+
+	// ListenCRI is the listening address which serves CRI.
+	ListenCRI string
 
 	// Debug refers to the log mode.
 	Debug bool
@@ -37,4 +44,13 @@ type Config struct {
 
 	// Default OCI Runtime
 	DefaultRuntime string
+
+	// Enable lxcfs
+	IsLxcfsEnabled bool
+
+	// LxcfsBinPath is the absolute path of lxcfs binary
+	LxcfsBinPath string
+
+	// LxcfsHome is the absolute path of lxcfs
+	LxcfsHome string
 }

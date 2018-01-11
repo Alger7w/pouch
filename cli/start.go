@@ -18,18 +18,19 @@ var startDescription = "Start a created container object in Pouchd. " +
 // StartCommand use to implement 'start' command, it start a container.
 type StartCommand struct {
 	baseCommand
-	attach bool
-	stdin  bool
+	detachKeys string
+	attach     bool
+	stdin      bool
 }
 
 // Init initialize start command.
 func (s *StartCommand) Init(c *Cli) {
 	s.cli = c
 	s.cmd = &cobra.Command{
-		Use:   "start [container]",
+		Use:   "start [OPTIONS] CONTAINER",
 		Short: "Start a created or stopped container",
 		Long:  startDescription,
-		Args:  cobra.MinimumNArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return s.runStart(args)
 		},
@@ -41,6 +42,7 @@ func (s *StartCommand) Init(c *Cli) {
 // addFlags adds flags for specific command.
 func (s *StartCommand) addFlags() {
 	flagSet := s.cmd.Flags()
+	flagSet.StringVar(&s.detachKeys, "detach-keys", "", "Override the key sequence for detaching a container")
 	flagSet.BoolVarP(&s.attach, "attach", "a", false, "Attach container's STDOUT and STDERR")
 	flagSet.BoolVarP(&s.stdin, "interactive", "i", false, "Attach container's STDIN")
 }
@@ -81,7 +83,7 @@ func (s *StartCommand) runStart(args []string) error {
 	}
 
 	// start container
-	if err := apiClient.ContainerStart(container, ""); err != nil {
+	if err := apiClient.ContainerStart(container, s.detachKeys); err != nil {
 		return fmt.Errorf("failed to start container %s: %v", container, err)
 	}
 
@@ -130,10 +132,10 @@ func restoreMode(in, out *terminal.State) error {
 // startExample shows examples in start command, and is used in auto-generated cli docs.
 func startExample() string {
 	return `$ pouch ps
-Name     ID       Status    Image
-foo      71b9c1   Created   docker.io/library/busybox:latest
+Name     ID       Status    Image                              Runtime
+foo      71b9c1   Created   docker.io/library/busybox:latest   runc
 $ pouch start foo
 $ pouch ps
-Name     ID       Status    Image
-foo      71b9c1   Running   docker.io/library/busybox:latest`
+Name     ID       Status    Image                              Runtime
+foo      71b9c1   Running   docker.io/library/busybox:latest   runc`
 }

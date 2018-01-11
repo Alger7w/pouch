@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alibaba/pouch/pkg/reference"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +24,7 @@ type CreateCommand struct {
 func (cc *CreateCommand) Init(c *Cli) {
 	cc.cli = c
 	cc.cmd = &cobra.Command{
-		Use:   "create [image]",
+		Use:   "create [OPTIONS] IMAGE [ARG...]",
 		Short: "Create a new container with specified image",
 		Long:  createDescription,
 		Args:  cobra.MinimumNArgs(1),
@@ -38,19 +39,41 @@ func (cc *CreateCommand) Init(c *Cli) {
 // addFlags adds flags for specific command.
 func (cc *CreateCommand) addFlags() {
 	flagSet := cc.cmd.Flags()
+	flagSet.SetInterspersed(false)
 	flagSet.StringVar(&cc.name, "name", "", "Specify name of container")
 	flagSet.BoolVarP(&cc.tty, "tty", "t", false, "Allocate a tty device")
 	flagSet.StringSliceVarP(&cc.volume, "volume", "v", nil, "Bind mount volumes to container")
 	flagSet.StringVar(&cc.runtime, "runtime", "", "Specify oci runtime")
+	flagSet.StringSliceVarP(&cc.env, "env", "e", nil, "Set environment variables for container")
+	flagSet.StringSliceVarP(&cc.labels, "label", "l", nil, "Set label for a container")
+	flagSet.StringVar(&cc.entrypoint, "entrypoint", "", "Overwrite the default entrypoint")
+	flagSet.StringVarP(&cc.workdir, "workdir", "w", "", "Set the working directory in a container")
+	flagSet.StringVar(&cc.hostname, "hostname", "", "Set container's hostname")
+	flagSet.Int64Var(&cc.cpushare, "cpu-share", 0, "CPU shares")
+	flagSet.StringVar(&cc.cpusetcpus, "cpuset-cpus", "", "CPUs in cpuset")
+	flagSet.StringVar(&cc.cpusetmems, "cpuset-mems", "", "MEMs in cpuset")
+	flagSet.Int64Var(&cc.memorySwappiness, "memory-wappiness", -1, "Container memory swappiness [0, 100]")
+	flagSet.StringVarP(&cc.memory, "memory", "m", "", "Container memory limit")
+	flagSet.StringVar(&cc.memorySwap, "memory-swap", "", "Container swap limit")
+	flagSet.StringSliceVarP(&cc.devices, "device", "", nil, "Add a host device to the container")
+	flagSet.BoolVar(&cc.enableLxcfs, "enableLxcfs", false, "Enable lxcfs")
 }
 
 // runCreate is the entry of create command.
 func (cc *CreateCommand) runCreate(args []string) error {
-	config := cc.config()
+	config, err := cc.config()
+	if err != nil {
+		return fmt.Errorf("failed to create container: %v", err)
+	}
 
-	config.Image = args[0]
-	if len(args) == 2 {
-		config.Cmd = strings.Fields(args[1])
+	ref, err := reference.Parse(args[0])
+	if err != nil {
+		return fmt.Errorf("failed to create container: %v", err)
+	}
+	config.Image = ref.String()
+
+	if len(args) > 1 {
+		config.Cmd = args[1:]
 	}
 	containerName := cc.name
 
